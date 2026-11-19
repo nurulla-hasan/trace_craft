@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, LoaderCircle, Sparkles, Upload } from "lucide-react";
+import { ImagePlus, LoaderCircle, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CANVAS_BG_CLASSES,
@@ -343,7 +343,7 @@ export function StudioCanvas({
             className="relative flex h-auto max-h-[80vh] w-auto max-w-[85vw] items-center justify-center select-none"
           >
             {/* ONLY VECTOR VIEW: Clean, full-color mathematical vector graphics */}
-            {hasSvg ? (
+            {hasSvg && svgContent ? (
               <div
                 className="vector-canvas-svg h-full w-full select-none"
                 dangerouslySetInnerHTML={{ __html: svgContent }}
