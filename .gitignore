@@ -1,0 +1,143 @@
+# ==========================================
+# Root .gitignore for TraceCraft Vectorizer
+# ==========================================
+
+# Environment variables & secrets (CRITICAL: Never commit .env)
+# ==========================================
+# Root .gitignore for TraceCraft Vectorizer
+# ==========================================
+
+# Environment variables & secrets (CRITICAL: Never commit .env)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+!.env.docker.example
+!.env.example
+
+# Node / JS dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+
+# Python / Virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing / Coverage
+coverage/
+.nyc_output/
+.coverage
+
+# Runtime uploads & persistent storage
+storage/
+*.sqlite
+*.sqlite3
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+.temp/
+.tmp/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+!.env.docker.example
+!.env.example
+
+# Node / JS dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+
+# Python / Virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing / Coverage
+coverage/
+.nyc_output/
+.coverage
+
+# Runtime uploads & persistent storage
+storage/
+*.sqlite
+*.sqlite3
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+.temp/
+.tmp/
