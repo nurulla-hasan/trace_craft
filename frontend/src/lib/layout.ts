@@ -17,3 +17,9 @@ export const PAGE_MIN_HEIGHT =
 // than a minimum, so the panes — and not the document — are the scrollers.
 export const STICKY_HEIGHT =
   "h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5.75rem)]";
+
+// Studio workspace: fills the viewport under the navbar on every screen, with
+// a fixed split canvas/controls shell on desktop. The extra 1px accounts for
+// the navbar's bottom border so the page never gains a scrollbar.
+export const WORKSPACE_HEIGHT =
+  "min-h-[calc(100dvh-4rem-1px)] lg:h-[calc(100dvh-4rem-1px)]";

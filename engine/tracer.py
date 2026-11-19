@@ -322,6 +322,111 @@ def _boost_interior_lines(
     return out
 
 
+def _detect_region_lines(
+    crop_bgr: np.ndarray,
+    label_1x: np.ndarray,
+    fg_4x: np.ndarray,
+    palette_bgr: np.ndarray,
+    scale: int = SCALE,
+    min_span: float = 16.0,
+    min_units: float = 6.0,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Per-region local PCA contrast stretch + 4x DoG line detection.
+
+    For every large solid color region, project its pixels onto the region's own first principal
+    color axis (where 1px lines/grooves live), then find thin ridges of that scalar field.
+    Returns a list of (mask_4x, line_color_bgr) overlays.
+    """
+    K = len(palette_bgr)
+    h, w = label_1x.shape
+    H4, W4 = h * scale, w * scale
+    f = crop_bgr.astype(np.float32)
+    overlays: list[tuple[np.ndarray, np.ndarray]] = []
+
+    fg_1x = cv2.resize(fg_4x.astype(np.uint8), (w, h), interpolation=cv2.INTER_AREA) > 0
+    up_bgr = cv2.resize(crop_bgr, (W4, H4), interpolation=cv2.INTER_CUBIC).astype(np.float32)
+    ell5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+    for k in range(K):
+        reg = (label_1x == k) & fg_1x
+        if int(reg.sum()) < 80:
+            continue
+        # Close so lines inside the region (labelled as other colors) are included in its support
+        reg_c = cv2.morphologyEx(reg.astype(np.uint8), cv2.MORPH_CLOSE, ell5) > 0
+        support = cv2.erode(reg_c.astype(np.uint8), ell5) > 0
+        if int(support.sum()) < 60:
+            continue
+
+        px = f[support]
+        mean = px.mean(axis=0)
+        cov = np.cov((px - mean).T)
+        evals, evecs = np.linalg.eigh(cov)
+        axis = evecs[:, -1]
+        proj = (f - mean) @ axis
+        lo, hi = np.percentile(proj[support], [1, 99])
+        span = float(hi - lo)
+        if span < min_span:
+            continue
+
+        s = np.clip((proj - lo) / span, 0.0, 1.0)
+        s[~support] = 0.5
+        s4 = cv2.resize(s.astype(np.float32), (W4, H4), interpolation=cv2.INTER_CUBIC)
+        dog = cv2.GaussianBlur(s4, (0, 0), 1.4) - cv2.GaussianBlur(s4, (0, 0), 8.0)
+
+        sup4 = cv2.resize(support.astype(np.uint8), (W4, H4), interpolation=cv2.INTER_NEAREST) > 0
+        sup4 = (cv2.erode(sup4.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0) & fg_4x
+
+        thr = max(0.06, min_units / span)
+        for sign in (-1.0, 1.0):
+            det = sup4 & (sign * dog > thr)
+            n_cc, lab, stats, _ = cv2.connectedComponentsWithStats(det.astype(np.uint8), connectivity=8)
+            keep = np.zeros_like(det)
+            for cid in range(1, n_cc):
+                if stats[cid, cv2.CC_STAT_AREA] >= 48:
+                    keep |= lab == cid
+            if not np.any(keep):
+                continue
+            # Line color from the strongest half of detected pixels (undo anti-aliasing blend)
+            vals = np.abs(dog[keep])
+            sel_px = up_bgr[keep][vals >= np.median(vals)]
+            line_col = np.median(sel_px, axis=0).astype(np.float32)
+            if float(np.linalg.norm(line_col - palette_bgr[k])) < 12.0:
+                continue
+            overlays.append((keep, line_col))
+    return overlays
+
+
+def _absorb_small_color_ccs(
+    fg_label_4x: np.ndarray,
+    fg_4x: np.ndarray,
+    K: int,
+    min_area: int = 160,
+) -> np.ndarray:
+    """Merge isolated small color CCs (< min_area pixels at 4x) into their dominant neighbor.
+
+    This eliminates JPEG-noise color specks that survived palette assignment.
+    At 4x, min_area=160 corresponds to a 10x4 patch at 1x — anything smaller is noise.
+    """
+    out = fg_label_4x.copy()
+    kern3 = np.ones((3, 3), np.uint8)
+    for k in range(K):
+        mask_k = ((out == k) & fg_4x).astype(np.uint8)
+        n_cc, cc_lab, stats, _ = cv2.connectedComponentsWithStats(mask_k, connectivity=8)
+        for cid in range(1, n_cc):
+            area = stats[cid, cv2.CC_STAT_AREA]
+            if area >= min_area:
+                continue
+            comp = (cc_lab == cid).astype(np.uint8)
+            dil = (cv2.dilate(comp, kern3) > 0) & fg_4x & (cc_lab != cid)
+            nb_labels = out[dil]
+            if len(nb_labels) == 0:
+                continue
+            vals, counts = np.unique(nb_labels, return_counts=True)
+            nb_k = int(vals[np.argmax(counts)])
+            out[cc_lab == cid] = nb_k
+    return out
+
+
 def _clean_outer_border_blotches(
     fg_label_4x: np.ndarray,
     fg_4x: np.ndarray,
@@ -398,7 +503,7 @@ def trace_color_region(
     if K == 0:
         return [], palette_bgr
 
-    alpha = unmix_pixels(crop_bgr, crop_bg_mask, pure_mask, palette_bgr, bg_color)
+    alpha = unmix_pixels(den, crop_bg_mask, pure_mask, palette_bgr, bg_color)
     alpha = _boost_thin_strokes(alpha, crop_bg_mask)
 
     h, w = crop_bgr.shape[:2]
@@ -409,6 +514,10 @@ def trace_color_region(
     fg_up = cv2.resize(fg_1x, (W4, H4), interpolation=cv2.INTER_CUBIC)
     fg_up = cv2.GaussianBlur(fg_up, (0, 0), 1.55)
     fg_4x = fg_up > 0.50
+
+    # Morphological closing at 4x to fill tiny JPEG-induced holes in the foreground mask
+    ell7 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    fg_4x = cv2.morphologyEx(fg_4x.astype(np.uint8), cv2.MORPH_CLOSE, ell7) > 0
 
     n_cc, cc_lab, cc_stats, _ = cv2.connectedComponentsWithStats(
         fg_4x.astype(np.uint8), connectivity=8
@@ -427,10 +536,6 @@ def trace_color_region(
         up = cv2.GaussianBlur(up, (0, 0), 1.05)
         fg_alpha_4x[k] = np.clip(up, 0.0, 1.0)
 
-    fg_alpha_4x = _apply_4x_dog_interior_details(
-        fg_alpha_4x, crop_bgr, palette_bgr, fg_4x, scale=scale
-    )
-
     fg_label_4x = fg_alpha_4x.argmax(axis=0).astype(np.int32)
 
     areas_init = np.array([((fg_label_4x == k) & fg_4x).sum() for k in range(K)])
@@ -439,12 +544,29 @@ def trace_color_region(
     # Clean outer border JPEG-undershoot blotches (preserving high-contrast eyes)
     fg_label_4x = _clean_outer_border_blotches(fg_label_4x, fg_4x, palette_bgr, dom_k, K)
 
-    areas = np.array([((fg_label_4x == k) & fg_4x).sum() for k in range(K)])
+    # Absorb tiny isolated JPEG-noise color specks into their dominant neighbor
+    fg_label_4x = _absorb_small_color_ccs(fg_label_4x, fg_4x, K, min_area=160)
+
+    # Per-region PCA contrast-stretch line detection (baleen grooves, shell lines, fin ribs...)
+    label_1x = alpha[:K].argmax(axis=0).astype(np.int32)
+    overlays = _detect_region_lines(den, label_1x, fg_4x, palette_bgr, scale=scale)
+    for line_mask, line_col in overlays:
+        d_pal = np.linalg.norm(palette_bgr - line_col[None, :], axis=1)
+        j = int(np.argmin(d_pal))
+        if float(d_pal[j]) < 14.0:
+            idx = j
+        else:
+            palette_bgr = np.vstack([palette_bgr, line_col[None, :]])
+            idx = len(palette_bgr) - 1
+        fg_label_4x[line_mask & fg_4x] = idx
+
+    K_all = len(palette_bgr)
+    areas = np.array([((fg_label_4x == k) & fg_4x).sum() for k in range(K_all)])
     order = [int(k) for k in np.argsort(-areas) if areas[k] >= 12]
 
     paths: list[str] = []
     kern_bridge = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
-    kern_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    kern_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
 
     for rank, k in enumerate(order):
         mask_k = (fg_label_4x == k) & fg_4x

@@ -34,8 +34,16 @@ def detect_mode(img_bgr: np.ndarray) -> str:
 
 
 def denoise_1x(img_bgr: np.ndarray) -> np.ndarray:
-    """Light edge-preserving denoise at 1x resolution to calm JPEG ringing without smearing 1px details."""
-    return cv2.bilateralFilter(img_bgr, d=5, sigmaColor=14, sigmaSpace=5)
+    """Edge-preserving denoise at 1x resolution.
+
+    Two-pass strategy:
+    1. Non-local means (fastNlMeansDenoisingColored, h=6) – suppresses JPEG 8x8 block ringing
+       without smearing sharp 1px edges. Slower but crucial for clean palette discovery.
+    2. Light bilateral (d=5, sigmaColor=12) – smooths residual high-frequency salt in flat areas.
+    """
+    # fastNlMeansDenoising: h=6 is conservative enough to preserve thin strokes & eyes
+    nlm = cv2.fastNlMeansDenoisingColored(img_bgr, None, h=6, hColor=6, templateWindowSize=7, searchWindowSize=15)
+    return cv2.bilateralFilter(nlm, d=5, sigmaColor=12, sigmaSpace=5)
 
 
 def extract_background_mask(
