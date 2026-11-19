@@ -50,7 +50,7 @@ export function CreditsQuotaSummary({ className }: { className?: string }) {
         <div
           className={cn(
             "h-full rounded-full transition-[width] duration-300",
-            exhausted ? "bg-destructive" : nearCap ? "bg-amber-500" : "bg-primary",
+            exhausted ? "bg-destructive" : nearCap ? "bg-dot-min" : "bg-primary",
           )}
           style={{ width: `${percentage}%` }}
         />
@@ -58,7 +58,7 @@ export function CreditsQuotaSummary({ className }: { className?: string }) {
 
       <p
         className={cn(
-          "text-[11px] text-muted-foreground",
+          "text-xs text-muted-foreground",
           exhausted && "text-destructive",
         )}
       >

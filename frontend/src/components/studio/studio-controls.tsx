@@ -1,18 +1,16 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   Check,
   CircleAlert,
   Contrast,
   Copy,
-  Crown,
   Download,
   Eraser,
   Image as ImageIcon,
   ImageDown,
-  Info,
   PaintBucket,
   Palette,
   Shapes,
@@ -20,10 +18,7 @@ import {
   Trash,
   Upload,
   WandSparkles,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -36,6 +31,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { DockButton, DockDivider } from "./studio-dock-primitives";
+import { StudioStatsPopover } from "./studio-stats-popover";
+import { StudioZoomDock } from "./studio-zoom-dock";
 import {
   CANVAS_BGS,
   CANVAS_BG_CLASSES,
@@ -100,62 +98,10 @@ interface StudioControlsProps {
   onViewChange: (view: StudioView) => void;
   onCanvasBgChange: (bg: CanvasBg) => void;
   onZoomChange: (zoom: number) => void;
+  onResetView: () => void;
   onCopy: () => void;
   onDownloadSvg: () => void;
   onDownloadPng: () => void;
-}
-
-interface DockButtonProps {
-  label: string;
-  children: ReactNode;
-  onClick?: () => void;
-  variant?: "ghost" | "outline" | "default" | "secondary" | "destructive";
-  size?: "icon" | "icon-lg";
-  disabled?: boolean;
-  loading?: boolean;
-  pressed?: boolean;
-}
-
-function DockButton({
-  label,
-  children,
-  onClick,
-  variant = "ghost",
-  size = "icon",
-  disabled,
-  loading,
-  pressed,
-}: DockButtonProps) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant={variant}
-            size={size}
-            onClick={onClick}
-            disabled={disabled}
-            loading={loading}
-            loadingText=""
-            aria-label={label}
-            aria-pressed={pressed}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent side="top">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function DockDivider() {
-  return (
-    <span
-      aria-hidden="true"
-      className="hidden h-6 w-px shrink-0 bg-studio-muted/40 sm:block lg:h-px lg:w-6"
-    />
-  );
 }
 
 export function StudioControls({
@@ -179,13 +125,13 @@ export function StudioControls({
   onViewChange,
   onCanvasBgChange,
   onZoomChange,
+  onResetView,
   onCopy,
   onDownloadSvg,
   onDownloadPng,
 }: StudioControlsProps) {
   const [bgOpen, setBgOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [statsOpen, setStatsOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
   return (
@@ -405,118 +351,19 @@ export function StudioControls({
           </PopoverContent>
         </Popover>
 
-        <Popover open={statsOpen} onOpenChange={setStatsOpen}>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Output details"
-                title="Output details"
-              />
-            }
-          >
-            <Info />
-          </PopoverTrigger>
-          <PopoverContent
-            side={isDesktop ? "left" : "top"}
-            align={isDesktop ? "center" : "end"}
-            sideOffset={isDesktop ? 12 : 8}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-popover-foreground">
-                Output
-              </p>
-              {quota &&
-                (quota.unlimited ? (
-                  <Badge variant="default">
-                    <Crown />
-                    Unlimited
-                  </Badge>
-                ) : quota.remainingCredits !== null ? (
-                  <Badge variant="outline">
-                    {quota.remainingCredits} credits
-                  </Badge>
-                ) : null)}
-            </div>
-
-            {file && (
-              <p className="truncate font-mono text-xs text-muted-foreground">
-                {file.name}
-              </p>
-            )}
-
-            {stats ? (
-              <dl className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-muted p-2">
-                  <dt className="text-muted-foreground">Canvas</dt>
-                  <dd className="mt-0.5 font-mono">
-                    {stats.width} × {stats.height}
-                  </dd>
-                </div>
-                <div className="rounded-lg bg-muted p-2">
-                  <dt className="text-muted-foreground">Regions</dt>
-                  <dd className="mt-0.5 font-mono">{stats.regions}</dd>
-                </div>
-                <div className="rounded-lg bg-muted p-2">
-                  <dt className="text-muted-foreground">Paths</dt>
-                  <dd className="mt-0.5 font-mono">{stats.paths}</dd>
-                </div>
-                <div className="rounded-lg bg-muted p-2">
-                  <dt className="text-muted-foreground">File size</dt>
-                  <dd className="mt-0.5 font-mono">
-                    {(stats.bytes / 1024).toFixed(1)} KB
-                  </dd>
-                </div>
-                <div className="rounded-lg bg-muted p-2">
-                  <dt className="text-muted-foreground">Mode</dt>
-                  <dd className="mt-0.5 font-mono">{stats.mode}</dd>
-                </div>
-                <div className="rounded-lg bg-muted p-2">
-                  <dt className="text-muted-foreground">Time</dt>
-                  <dd className="mt-0.5 font-mono">
-                    {stats.duration_ms !== undefined
-                      ? `${(stats.duration_ms / 1000).toFixed(2)}s`
-                      : "—"}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="text-xs leading-5 text-muted-foreground">
-                Vectorize an image to see output details here.
-              </p>
-            )}
-          </PopoverContent>
-        </Popover>
+        <StudioStatsPopover
+          file={file}
+          quota={quota}
+          stats={stats}
+          isDesktop={isDesktop}
+        />
       </aside>
 
-      <div
-        className={cn(
-          "absolute right-3 bottom-28 z-20 flex items-center gap-1 rounded-2xl border border-studio-border bg-studio-panel/95 p-1 shadow-xl backdrop-blur-md",
-          "sm:bottom-20 lg:inset-x-0 lg:bottom-4 lg:mx-auto lg:w-fit",
-        )}
-      >
-        <DockButton
-          label="Zoom out"
-          onClick={() => onZoomChange(zoom - 0.25)}
-          disabled={zoom <= 0.25}
-        >
-          <ZoomOut />
-        </DockButton>
-        <span
-          aria-live="polite"
-          className="w-11 text-center font-mono text-xs text-studio-foreground select-none"
-        >
-          {Math.round(zoom * 100)}%
-        </span>
-        <DockButton
-          label="Zoom in"
-          onClick={() => onZoomChange(zoom + 0.25)}
-          disabled={zoom >= 4}
-        >
-          <ZoomIn />
-        </DockButton>
-      </div>
+      <StudioZoomDock
+        zoom={zoom}
+        onZoomChange={onZoomChange}
+        onResetView={onResetView}
+      />
     </>
   );
 }

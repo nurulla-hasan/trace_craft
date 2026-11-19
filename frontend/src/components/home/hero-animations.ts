@@ -41,12 +41,12 @@ export const pipelineItemVariants: Variants = {
 };
 
 export const PIPELINE_STEPS = [
-  { label: "PNG / JPG", color: "border-sky-400 text-sky-400" },
-  { label: "Trace", color: "border-violet-400 text-violet-400" },
-  { label: "Bezier", color: "border-pink-400 text-pink-400" },
-  { label: "SVG", color: "border-amber-400 text-amber-400" },
-  { label: "PDF", color: "border-emerald-400 text-emerald-400" },
-  { label: "DXF", color: "border-cyan-400 text-cyan-400" },
+  { label: "PNG / JPG", color: "border-chart-3 text-chart-3" },
+  { label: "Trace", color: "border-trace text-trace" },
+  { label: "Bezier", color: "border-primary text-primary" },
+  { label: "SVG", color: "border-dot-min text-dot-min" },
+  { label: "PDF", color: "border-dot-max text-dot-max" },
+  { label: "DXF", color: "border-chart-4 text-chart-4" },
 ];
 
 export const PALETTE_SWATCHES = [
@@ -65,11 +65,11 @@ export const CARD_TABS = [
 ];
 
 export const AVATAR_COLORS = [
-  "bg-amber-400 text-primary-foreground",
-  "bg-sky-400 text-primary-foreground",
-  "bg-emerald-400 text-primary-foreground",
-  "bg-pink-400 text-primary-foreground",
-  "bg-violet-400 text-primary-foreground",
+  "bg-dot-min text-primary-foreground",
+  "bg-trace text-trace-foreground",
+  "bg-dot-max text-primary-foreground",
+  "bg-chart-3 text-primary-foreground",
+  "bg-primary text-primary-foreground",
 ];
 
 export const BOTTOM_HIGHLIGHTS = [
@@ -77,7 +77,7 @@ export const BOTTOM_HIGHLIGHTS = [
     num: "01",
     title: "Drop any raster",
     desc: "PNG, JPG, WebP up to 50MP",
-    accent: "text-sky-400",
+    accent: "text-trace",
   },
   {
     num: "02",
@@ -89,12 +89,12 @@ export const BOTTOM_HIGHLIGHTS = [
     num: "03",
     title: "Loupe & path editor",
     desc: "Inspect nodes & tweak colors live",
-    accent: "text-pink-400",
+    accent: "text-dot-min",
   },
   {
     num: "04",
     title: "Production exports",
     desc: "Clean SVG, PNG 4×, PDF, EPS, DXF",
-    accent: "text-emerald-400",
+    accent: "text-dot-max",
   },
 ];

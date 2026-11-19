@@ -50,7 +50,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
       {/* Red notebook margin line on left */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-6 sm:left-8 w-px bg-rose-500/25"
+        className="pointer-events-none absolute inset-y-0 left-6 sm:left-8 w-px bg-destructive/25"
       />
 
       <div className="relative pl-4 sm:pl-6 space-y-6">

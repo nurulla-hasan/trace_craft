@@ -2,6 +2,7 @@ numpy
 scipy
 opencv-python-headless
 Pillow
+vtracer
 resvg-py
 fastapi
 uvicorn

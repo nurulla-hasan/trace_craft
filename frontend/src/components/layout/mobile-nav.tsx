@@ -69,7 +69,7 @@ export function MobileNav({ items, className }: MobileNavProps) {
         </SheetTrigger>
         <SheetContent
           side="right"
-          className="w-72 sm:w-80 max-w-[88vw] p-4 flex flex-col overflow-y-auto overscroll-contain gap-4"
+          className="w-72 sm:w-80 max-w-full p-4 flex flex-col overflow-y-auto overscroll-contain gap-4"
         >
           <div className="flex flex-col gap-3.5">
             <SheetHeader className="text-left pb-3 border-b border-border">

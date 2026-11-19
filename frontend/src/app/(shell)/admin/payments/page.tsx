@@ -3,17 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { Check, ReceiptText, ShieldAlert, X } from "lucide-react";
+import { RejectPaymentDialog } from "@/components/admin/reject-payment-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -23,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { CONTAINER_GUTTER, CONTAINER_MAX_WIDTH } from "@/lib/layout";
 import { cn } from "@/lib/utils";
 import {
@@ -32,7 +23,6 @@ import {
   useAdminPaymentRequests,
   useApprovePaymentRequest,
   useGetMe,
-  useRejectPaymentRequest,
 } from "@/services";
 
 const FILTERS: { label: string; value?: PaymentStatus }[] = [
@@ -60,70 +50,6 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
-function RejectDialog({
-  request,
-  onClose,
-}: {
-  request: AdminPaymentRequest | null;
-  onClose: () => void;
-}) {
-  const [note, setNote] = React.useState("");
-  const { mutateAsync: reject, isPending } = useRejectPaymentRequest();
-
-  const handleReject = async () => {
-    if (!request) return;
-    try {
-      await reject({ id: request.id, note: note.trim() });
-      onClose();
-    } catch {
-      // Toast handled by the mutation hook.
-    }
-  };
-
-  return (
-    <Dialog
-      open={request !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Reject payment request</DialogTitle>
-          <DialogDescription>
-            {request
-              ? `Reject ${request.user.name}'s ${request.plan} payment of ${formatBdt(request.amount)}?`
-              : null}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-1.5">
-          <Label htmlFor="reject-note">Note to the user (optional)</Label>
-          <Textarea
-            id="reject-note"
-            value={note}
-            maxLength={300}
-            placeholder="e.g. Transaction ID not found in our statement."
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            loading={isPending}
-            loadingText="Rejecting..."
-            onClick={handleReject}
-          >
-            Reject request
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function AdminPaymentsPage() {
   const { data: user, isLoading: userLoading } = useGetMe();
   const [filter, setFilter] = React.useState<PaymentStatus | undefined>(
@@ -150,7 +76,7 @@ export default function AdminPaymentsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
+      <div className="flex min-h-120 flex-col items-center justify-center gap-4 px-6 text-center">
         <ShieldAlert className="size-10 text-destructive" />
         <div>
           <h1 className="font-heading text-xl font-semibold">Admins only</h1>
@@ -174,7 +100,7 @@ export default function AdminPaymentsPage() {
       )}
     >
       <div className="flex flex-col gap-2">
-        <p className="flex items-center gap-2 font-mono text-[11px] tracking-[0.2em] text-primary uppercase">
+        <p className="flex items-center gap-2 font-mono text-xs tracking-widest text-primary uppercase">
           <ReceiptText className="size-3.5" />
           Admin
         </p>
@@ -191,7 +117,7 @@ export default function AdminPaymentsPage() {
         {FILTERS.map((item) => (
           <Button
             key={item.label}
-            size="sm"
+            size="default"
             variant={filter === item.value ? "default" : "outline"}
             onClick={() => setFilter(item.value)}
           >
@@ -284,7 +210,7 @@ export default function AdminPaymentsPage() {
                     {request.status === "PENDING" ? (
                       <div className="flex justify-end gap-2">
                         <Button
-                          size="sm"
+                          size="default"
                           variant="outline"
                           onClick={() => setRejectTarget(request)}
                         >
@@ -292,7 +218,7 @@ export default function AdminPaymentsPage() {
                           Reject
                         </Button>
                         <Button
-                          size="sm"
+                          size="default"
                           loading={
                             isApproving && approvingId === request.id
                           }
@@ -316,7 +242,7 @@ export default function AdminPaymentsPage() {
         </Table>
       </div>
 
-      <RejectDialog
+      <RejectPaymentDialog
         key={rejectTarget?.id ?? "closed"}
         request={rejectTarget}
         onClose={() => setRejectTarget(null)}

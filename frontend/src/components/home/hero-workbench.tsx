@@ -24,7 +24,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
     >
       <div className="mb-2 flex items-center justify-between font-mono text-xs text-studio-muted">
         <span>{"//"} live studio workbench</span>
-        <span className="inline-flex items-center gap-1.5 text-emerald-400">
+        <span className="inline-flex items-center gap-1.5 text-dot-max">
           <motion.span
             animate={
               shouldReduceMotion
@@ -94,7 +94,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-0.5 text-xs text-emerald-400">
+              <span className="rounded-full border border-dot-max/40 bg-dot-max/10 px-2.5 py-0.5 text-xs text-dot-max">
                 42 paths
               </span>
               <span className="rounded-full border border-primary/50 bg-primary/10 px-2.5 py-0.5 text-xs text-primary">
@@ -112,7 +112,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
             {/* Red notebook margin line */}
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 left-7 w-px bg-rose-500/35"
+              className="pointer-events-none absolute inset-y-0 left-7 w-px bg-destructive/35"
             />
             {/* Top ruler strip */}
             <div
@@ -364,7 +364,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
               </svg>
 
               {/* Handwritten canvas annotations */}
-              <span className="absolute top-6 left-11 -rotate-3 font-hand text-base text-sky-400">
+              <span className="absolute top-6 left-11 -rotate-3 font-hand text-base text-trace">
                 anchor node
               </span>
               <span className="absolute right-5 bottom-3 -rotate-2 font-hand text-base text-primary">
@@ -435,7 +435,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
             </span>
             <Link
               href="/studio"
-              className="text-sky-400 transition-colors hover:text-sky-300"
+              className="text-trace transition-colors hover:text-trace/80"
             >
               Try in Studio →
             </Link>
@@ -451,7 +451,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
             className={cn(
               "border-b-2 pb-1.5 transition-colors",
               tab.active
-                ? "border-indigo-400 text-studio-foreground"
+                ? "border-primary text-studio-foreground"
                 : "border-transparent text-studio-muted/70",
             )}
           >
@@ -470,7 +470,7 @@ export function HeroWorkbench({ shouldReduceMotion }: HeroWorkbenchProps) {
           repeat: Infinity,
           ease: "easeInOut",
         }}
-        className="mt-2 text-right -rotate-2 font-hand text-xl tracking-wide text-emerald-400"
+        className="mt-2 text-right -rotate-2 font-hand text-xl tracking-wide text-dot-max"
       >
         sharp at any zoom level
       </motion.p>

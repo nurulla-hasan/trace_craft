@@ -48,3 +48,6 @@ export const CANVAS_BG_CLASSES: Record<CanvasBg, string> = {
   muted: "bg-muted vk-dot-grid",
   checker: "studio-canvas-checker",
 };
+
+export const MIN_ZOOM = 0.25;
+export const MAX_ZOOM = 10;

@@ -75,6 +75,11 @@ Thumbs.db
 # Temporary files
 .temp/
 .tmp/
+
+# Local scratch / test folders
+/new/
+/test/
+
 .env.local
 .env.development.local
 .env.test.local
@@ -141,3 +146,7 @@ Thumbs.db
 # Temporary files
 .temp/
 .tmp/
+
+# Local scratch / test folders
+/new/
+/test/

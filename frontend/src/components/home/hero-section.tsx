@@ -209,7 +209,7 @@ export function HeroSection() {
                   href="/plans"
                   className="inline-flex h-12 items-center gap-2 rounded-full border border-studio-border bg-studio-panel px-6 text-sm font-medium text-studio-foreground transition-colors hover:border-studio-muted/60 hover:bg-accent sm:text-base"
                 >
-                  <span className="size-2 rounded-full bg-indigo-400" />
+                  <span className="size-2 rounded-full bg-primary" />
                   View Plans
                 </Link>
               </motion.div>
@@ -254,7 +254,7 @@ export function HeroSection() {
                         },
                       }
                 }
-                className="ml-1 -rotate-2 font-hand text-2xl text-indigo-400"
+                className="ml-1 -rotate-2 font-hand text-2xl text-primary"
               >
                 every curve editable ↗
               </motion.span>
@@ -267,9 +267,9 @@ export function HeroSection() {
             >
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-studio-foreground">
-                  <span className="text-violet-400">trace</span>(raster)
+                  <span className="text-trace">trace</span>(raster)
                 </span>
-                <span className="text-emerald-400/80">──────→</span>
+                <span className="text-dot-max/80">──────→</span>
                 <div className="flex items-center -space-x-1.5">
                   {AVATAR_COLORS.map((cls, idx) => (
                     <motion.span
@@ -291,9 +291,9 @@ export function HeroSection() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-studio-foreground">
-                  <span className="text-sky-400">precision</span>(curves)
+                  <span className="text-primary">precision</span>(curves)
                 </span>
-                <span className="text-emerald-400/80">──→</span>
+                <span className="text-dot-max/80">──→</span>
                 <span className="inline-flex items-center gap-1.5">
                   [0.1px fit,
                   <span className="rounded bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">

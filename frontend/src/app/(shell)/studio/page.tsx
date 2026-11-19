@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StudioCanvas, StudioControls } from "@/components/studio";
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  StudioCanvas,
+  StudioControls,
+} from "@/components/studio";
 import type {
   CanvasBg,
+  CanvasPan,
   QuotaInfo,
   StudioView,
   TraceMode,
@@ -27,6 +33,7 @@ export default function StudioPage() {
   const [canvasBg, setCanvasBg] = useState<CanvasBg>("surface");
   const [view, setView] = useState<StudioView>("original");
   const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<CanvasPan>({ x: 0, y: 0 });
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [svgOutput, setSvgOutput] = useState<string | null>(null);
@@ -68,6 +75,7 @@ export default function StudioPage() {
     setOriginalUrl(URL.createObjectURL(selected));
     setView("original");
     setZoom(1);
+    setPan({ x: 0, y: 0 });
   }, []);
 
   const handleClearImage = useCallback(() => {
@@ -78,6 +86,7 @@ export default function StudioPage() {
     setError(null);
     setView("original");
     setZoom(1);
+    setPan({ x: 0, y: 0 });
   }, []);
 
   const handleChooseImage = useCallback(() => {
@@ -85,7 +94,12 @@ export default function StudioPage() {
   }, []);
 
   const handleZoomChange = useCallback((next: number) => {
-    setZoom(Math.min(4, Math.max(0.25, Math.round(next * 100) / 100)));
+    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(next * 100) / 100)));
+  }, []);
+
+  const handleResetView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   }, []);
 
   const handleVectorize = useCallback(async () => {
@@ -218,9 +232,13 @@ export default function StudioPage() {
         loading={loading}
         view={view}
         zoom={zoom}
+        pan={pan}
         canvasBg={canvasBg}
         onChooseImage={handleChooseImage}
         onFileDrop={handleFileSelect}
+        onZoomChange={handleZoomChange}
+        onPanChange={setPan}
+        onResetView={handleResetView}
       />
 
       <StudioControls
@@ -244,6 +262,7 @@ export default function StudioPage() {
         onViewChange={setView}
         onCanvasBgChange={setCanvasBg}
         onZoomChange={handleZoomChange}
+        onResetView={handleResetView}
         onCopy={handleCopy}
         onDownloadSvg={handleDownloadSvg}
         onDownloadPng={handleDownloadPng4x}
