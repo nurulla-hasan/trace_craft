@@ -1,6 +1,6 @@
 import { Navbar } from "@/components/layout";
 
-export default function PrivateLayout({
+export default function ShellLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -8,7 +8,7 @@ export default function PrivateLayout({
   return (
     <>
       <Navbar />
-      {children}
+      <main className="flex-1">{children}</main>
     </>
   );
 }

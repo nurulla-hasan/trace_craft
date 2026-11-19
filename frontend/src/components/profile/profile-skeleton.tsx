@@ -1,7 +1,6 @@
 "use client";
 
 import { PageWrapper } from "@/components/common/page-wrapper";
-import { Navbar } from "@/components/layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONTAINER_GUTTER, CONTAINER_MAX_WIDTH } from "@/lib/layout";
 import { cn } from "@/lib/utils";
@@ -9,7 +8,6 @@ import { cn } from "@/lib/utils";
 export function ProfileSkeleton() {
   return (
     <div className="relative min-h-dvh bg-studio-surface">
-      <Navbar />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 vk-dot-grid opacity-40"

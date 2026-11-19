@@ -1,4 +1,4 @@
-"""Stage 3: Full 2-Color Pixel Unmixing (Sub-pixel Coverage Maps & Outer-Edge Halo Prevention)."""
+"""Stage 3: Full 2-Color Pixel Unmixing with Strict Local Anti-Aliasing Physics."""
 
 from __future__ import annotations
 import cv2
@@ -16,11 +16,13 @@ def unmix_pixels(
 ) -> np.ndarray:
     """Compute continuous sub-pixel coverage map alpha of shape (K+1, H, W).
 
-    Channels 0..K-1 correspond to palette_bgr colors; channel K corresponds to background.
-    - Outer boundary pixels adjacent to a solid interior region unmix strictly between their
-      nearest pure interior color and background (preventing a pale belly color from matching
-      the anti-aliased edge of a dark back color!).
-    - Interior transition pixels and thin appendages unmix between locally present palette pairs.
+    Enforces two key physical laws of raster anti-aliasing:
+      1. Outer skin of solid regions (within 2.5px of pure_mask and bordering background)
+         can ONLY blend the nearest pure interior color with background (absorbing JPEG
+         Gibbs edge-undershoot instead of turning it into dark border blotches!).
+      2. Two foreground colors (Ci, Cj) can ONLY blend at pixels within ~2.5px of BOTH regions
+         (preventing a distant dark back color from blending with a light belly color to erase
+         interior teal baleen grooves!).
     """
     h, w = img_bgr.shape[:2]
     K = len(palette_bgr)
@@ -53,7 +55,6 @@ def unmix_pixels(
     hard_label[far_bg] = K
     alpha[K, far_bg] = 1.0
 
-    # Distance to pure interior pixels and nearest pure pixel coordinates
     if np.any(pure_mask):
         dist_to_pure, (nearest_py, nearest_px) = ndi.distance_transform_edt(
             ~pure_mask, return_indices=True
@@ -63,14 +64,11 @@ def unmix_pixels(
         dist_to_pure = np.full((h, w), 999.0, dtype=np.float32)
         nearest_pure_color = np.zeros((h, w), dtype=np.int32)
 
-    # Identify outer boundary pixels that border background AND are close to a pure interior core
-    # (<= 2.6px from pure_mask). These are outer edges of solid bodies (like a whale back/belly),
-    # NOT long thin appendages (like shrimp antennas where dist_to_pure > 3).
-    near_bg_1px = cv2.dilate(bg_mask.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
-    solid_outer_edge = (hard_label < 0) & near_bg_1px & (dist_to_pure <= 2.6)
+    # 3. Outer skin of solid regions: lock to (nearest_pure_color, bg) — including JPEG Gibbs
+    # edge-undershoot pixels (which dip up to ~38 RGB units darker than c_ref right inside the border!)
+    near_bg_2px = cv2.dilate(bg_mask.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    solid_outer_edge = (hard_label < 0) & near_bg_2px & (dist_to_pure <= 2.6)
 
-    # Check if pixel actually looks like a blend of nearest_pure_color and bg_color
-    # (or if it's a thin dark outline/eye right on the border)
     sy, sx = np.where(solid_outer_edge)
     if len(sy) > 0:
         P_s = img_f[sy, sx]
@@ -78,37 +76,35 @@ def unmix_pixels(
         c_ref = all_c[k_ref]
         diff_bg = c_ref - bg_f[None, :]
         denom = np.sum(diff_bg * diff_bg, axis=1)
-        t_bg = np.clip(np.sum((P_s - bg_f[None, :]) * diff_bg, axis=1) / np.maximum(denom, 1e-3), 0.0, 1.0)
+        t_bg = np.clip(
+            np.sum((P_s - bg_f[None, :]) * diff_bg, axis=1) / np.maximum(denom, 1e-3),
+            0.0,
+            1.0,
+        )
         recon_bg = bg_f[None, :] + t_bg[:, None] * diff_bg
         err_bg = np.linalg.norm(P_s - recon_bg, axis=1)
+        dist_cref = np.linalg.norm(P_s - c_ref, axis=1)
 
-        # If well-explained as anti-aliased edge of nearest interior color + background (err < 22),
-        # lock it directly to (k_ref, bg)! This makes it IMPOSSIBLE for a pale belly color to
-        # appear as confetti on a dark back's anti-aliased edge!
-        good_outer = err_bg < 22.0
+        # Match either smooth anti-aliased transition to bg (err_bg < 25) OR JPEG Gibbs undershoot
+        # of the local solid color (dist_cref < 40)
+        good_outer = (err_bg < 25.0) | (dist_cref < 40.0)
         gy, gx = sy[good_outer], sx[good_outer]
         gk = k_ref[good_outer]
         gt = t_bg[good_outer]
-        # Suppress faint outer JPEG ringing (< 0.25 coverage)
         gt = np.where(gt < 0.25, 0.0, gt)
         alpha[gk, gy, gx] = gt
         alpha[K, gy, gx] = 1.0 - gt
-        hard_label[gy, gx] = K  # mark as resolved
+        hard_label[gy, gx] = K
 
-    # 3. Local spatial presence maps for remaining unresolved pixels (interior transitions & thin strokes)
-    # Seed local_w ONLY from pure interior pixels + rescued thin-feature pixels that are NOT on
-    # resolved solid outer edges.
+    # 4. Local spatial presence maps for remaining interior / thin-stroke pixels
     local_w = np.zeros((K + 1, h, w), dtype=np.float32)
     unresolved_fg = fg_mask & (~solid_outer_edge)
     for k in range(K):
-        direct_k = unresolved_fg & (np.linalg.norm(img_f - all_c[k][None, None, :], axis=2) < 22.0)
+        direct_k = unresolved_fg & (np.linalg.norm(img_f - all_c[k][None, None, :], axis=2) < 20.0)
         m = ((pure_mask & (hard_label == k)) | direct_k).astype(np.float32)
-        local_w[k] = cv2.GaussianBlur(m, (7, 7), 1.5)
+        local_w[k] = cv2.GaussianBlur(m, (5, 5), 1.2)
     local_w[K] = cv2.GaussianBlur(bg_mask.astype(np.float32), (5, 5), 1.1)
 
-    near_bg_2px = cv2.dilate(bg_mask.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
-
-    # 4. Vectorized 2-color unmixing for remaining boundary/interior/thin pixels
     todo = hard_label < 0
     ty, tx = np.where(todo)
     if len(ty) == 0:
@@ -118,8 +114,6 @@ def unmix_pixels(
     N = len(ty)
     is_near_bg = near_bg_2px[ty, tx]
 
-    pairs = [(i, j) for i in range(K + 1) for j in range(i + 1, K + 1)]
-
     best_cost = np.full(N, 1e9, dtype=np.float32)
     best_i = np.full(N, K, dtype=np.int32)
     best_j = np.full(N, K, dtype=np.int32)
@@ -128,6 +122,24 @@ def unmix_pixels(
     lw_todo = local_w[:, ty, tx]  # (K+1, N)
     max_fg_lw = lw_todo[:K].max(axis=0)
 
+    # First check direct single-color match to each foreground color k
+    # Require strong local presence (or high contrast) so a dark shadow color from one part of an
+    # icon (e.g. whale's dark back flipper) cannot teleport onto JPEG noise on the tail or back!
+    for k in range(K):
+        ck = all_c[k]
+        err_single = np.linalg.norm(P - ck[None, :], axis=1)
+        has_k = lw_todo[k] > 0.025
+        pen_single = np.where(has_k, 0.0, 24.0).astype(np.float32)
+        cost_single = err_single + pen_single
+        better = cost_single < best_cost
+        if np.any(better):
+            best_cost[better] = cost_single[better]
+            best_i[better] = k
+            best_j[better] = k
+            best_t[better] = 1.0
+
+    # Then check 2-color blends (i, j)
+    pairs = [(i, j) for i in range(K + 1) for j in range(i + 1, K + 1)]
     for i, j in pairs:
         ci = all_c[i]
         cj = all_c[j]
@@ -140,12 +152,17 @@ def unmix_pixels(
         recon = cj[None, :] + t[:, None] * diff[None, :]
         err = np.linalg.norm(P - recon, axis=1)
 
-        has_i = lw_todo[i] > 0.02
-        has_j = lw_todo[j] > 0.02
-        pen = np.where(has_i & has_j, 0.0, np.where(has_i | has_j, 10.0, 26.0)).astype(np.float32)
+        has_i = lw_todo[i] > 0.025
+        has_j = lw_todo[j] > 0.025
 
-        if j == K:
-            # Disallow background (K) from mixing into strictly deep interior pixels
+        if j < K:
+            # Two foreground colors can ONLY blend if BOTH are locally present at this boundary!
+            # Prevents distant dark-blue back + light-blue belly from blending inside the belly
+            # to swallow teal baleen lines!
+            pen = np.where(has_i & has_j, 1.5, np.where(has_i | has_j, 24.0, 45.0)).astype(np.float32)
+        else:
+            # Blending with background (j == K)
+            pen = np.where(has_i & has_j, 0.0, np.where(has_i | has_j, 10.0, 26.0)).astype(np.float32)
             pen = np.where(is_near_bg, pen, pen + 90.0)
             dist_i_bg = float(np.sqrt(denom))
             if dist_i_bg < 90.0:
