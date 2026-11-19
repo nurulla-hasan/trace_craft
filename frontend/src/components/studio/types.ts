@@ -1,5 +1,5 @@
 export type TraceMode = "auto" | "color" | "binary";
-export type CanvasBg = "white" | "dark" | "checker";
+export type CanvasBg = "surface" | "muted" | "checker";
 export type StudioView = "original" | "vector";
 
 export interface VectorizeStats {
@@ -35,16 +35,16 @@ export const TRACE_MODE_LABELS: Record<TraceMode, string> = {
   binary: "B&W outline",
 };
 
-export const CANVAS_BGS: CanvasBg[] = ["white", "dark", "checker"];
+export const CANVAS_BGS: CanvasBg[] = ["surface", "muted", "checker"];
 
 export const CANVAS_BG_LABELS: Record<CanvasBg, string> = {
-  white: "White",
-  dark: "Dark",
-  checker: "Grid",
+  surface: "Default",
+  muted: "Muted",
+  checker: "Checker",
 };
 
 export const CANVAS_BG_CLASSES: Record<CanvasBg, string> = {
-  white: "bg-canvas-white",
-  dark: "bg-canvas-dark",
+  surface: "bg-background vk-dot-grid",
+  muted: "bg-muted vk-dot-grid",
   checker: "studio-canvas-checker",
 };

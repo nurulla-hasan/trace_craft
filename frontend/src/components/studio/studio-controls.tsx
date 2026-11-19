@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -10,15 +10,13 @@ import {
   Crown,
   Download,
   Eraser,
-  Grid3x3,
   Image as ImageIcon,
   ImageDown,
   Info,
-  Moon,
+  PaintBucket,
   Palette,
   Shapes,
   Sparkles,
-  Square,
   Trash,
   Upload,
   WandSparkles,
@@ -40,6 +38,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   CANVAS_BGS,
+  CANVAS_BG_CLASSES,
   CANVAS_BG_LABELS,
   TRACE_MODES,
   TRACE_MODE_LABELS,
@@ -56,11 +55,29 @@ const TRACE_MODE_ICONS = {
   binary: Contrast,
 } as const;
 
-const CANVAS_BG_ICONS = {
-  white: Square,
-  dark: Moon,
-  checker: Grid3x3,
-} as const;
+const DESKTOP_MEDIA_QUERY = "(min-width: 1024px)";
+
+function subscribeToDesktop(callback: () => void) {
+  const media = window.matchMedia(DESKTOP_MEDIA_QUERY);
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+function getDesktopSnapshot() {
+  return window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
+}
+
+function getDesktopServerSnapshot() {
+  return false;
+}
+
+function useIsDesktop() {
+  return useSyncExternalStore(
+    subscribeToDesktop,
+    getDesktopSnapshot,
+    getDesktopServerSnapshot,
+  );
+}
 
 interface StudioControlsProps {
   file: File | null;
@@ -167,7 +184,9 @@ export function StudioControls({
   onDownloadPng,
 }: StudioControlsProps) {
   const [bgOpen, setBgOpen] = useState(false);
-  const CanvasBgIcon = CANVAS_BG_ICONS[canvasBg];
+  const [exportOpen, setExportOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const isDesktop = useIsDesktop();
 
   return (
     <>
@@ -296,12 +315,16 @@ export function StudioControls({
               />
             }
           >
-            <CanvasBgIcon />
+            <PaintBucket />
           </PopoverTrigger>
-          <PopoverContent side="top" align="end" className="w-auto">
+          <PopoverContent
+            side={isDesktop ? "left" : "top"}
+            align={isDesktop ? "center" : "end"}
+            sideOffset={isDesktop ? 12 : 8}
+            className="w-auto"
+          >
             <div className="flex items-center gap-1">
               {CANVAS_BGS.map((option) => {
-                const BgIcon = CANVAS_BG_ICONS[option];
                 return (
                   <Tooltip key={option}>
                     <TooltipTrigger
@@ -318,7 +341,12 @@ export function StudioControls({
                         />
                       }
                     >
-                      <BgIcon />
+                      <span
+                        className={cn(
+                          "size-6 rounded-md border border-border",
+                          CANVAS_BG_CLASSES[option],
+                        )}
+                      />
                     </TooltipTrigger>
                     <TooltipContent side="top">
                       {CANVAS_BG_LABELS[option]} canvas
@@ -332,7 +360,7 @@ export function StudioControls({
 
         <DockDivider />
 
-        <Popover>
+        <Popover open={exportOpen} onOpenChange={setExportOpen}>
           <PopoverTrigger
             render={
               <Button
@@ -345,7 +373,12 @@ export function StudioControls({
           >
             <Download />
           </PopoverTrigger>
-          <PopoverContent side="top" align="end" className="w-auto">
+          <PopoverContent
+            side={isDesktop ? "left" : "top"}
+            align={isDesktop ? "center" : "end"}
+            sideOffset={isDesktop ? 12 : 8}
+            className="w-auto"
+          >
             <div className="flex items-center gap-1">
               <DockButton
                 label={copied ? "Copied" : "Copy SVG"}
@@ -372,7 +405,7 @@ export function StudioControls({
           </PopoverContent>
         </Popover>
 
-        <Popover>
+        <Popover open={statsOpen} onOpenChange={setStatsOpen}>
           <PopoverTrigger
             render={
               <Button
@@ -385,7 +418,11 @@ export function StudioControls({
           >
             <Info />
           </PopoverTrigger>
-          <PopoverContent side="top" align="end">
+          <PopoverContent
+            side={isDesktop ? "left" : "top"}
+            align={isDesktop ? "center" : "end"}
+            sideOffset={isDesktop ? 12 : 8}
+          >
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-popover-foreground">
                 Output

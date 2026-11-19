@@ -24,7 +24,7 @@ export default function StudioPage() {
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<TraceMode>("auto");
   const [transparentBg, setTransparentBg] = useState<boolean>(false);
-  const [canvasBg, setCanvasBg] = useState<CanvasBg>("white");
+  const [canvasBg, setCanvasBg] = useState<CanvasBg>("surface");
   const [view, setView] = useState<StudioView>("original");
   const [zoom, setZoom] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
