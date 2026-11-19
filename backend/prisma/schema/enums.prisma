@@ -1,0 +1,36 @@
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum AuthProvider {
+  CREDENTIAL
+  GOOGLE
+}
+
+enum UserPlan {
+  FREE
+  PRO
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentProvider {
+  BKASH
+  NAGAD
+  ROCKET
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}

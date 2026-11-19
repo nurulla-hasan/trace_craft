@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tracecraft-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_strong_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tracecraft_db}
+    volumes:
+      - tracecraft_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-tracecraft_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: tracecraft-redis
+    restart: unless-stopped
+    volumes:
+      - tracecraft_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    container_name: tracecraft-engine
+    restart: unless-stopped
+    ports:
+      - "${ENGINE_PORT:-8000}:8000"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tracecraft-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      engine:
+        condition: service_started
+    ports:
+      - "${BACKEND_PORT:-5010}:5000"
+    environment:
+      # Use development over plain HTTP (no domain/SSL yet) so auth cookies work; switch to production once HTTPS is enabled.
+      NODE_ENV: ${BACKEND_NODE_ENV:-development}
+      PORT: 5000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3010}
+      VECTORIZER_ENGINE_URL: ${VECTORIZER_ENGINE_URL:-http://engine:8000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_strong_password}@postgres:5432/${POSTGRES_DB:-tracecraft_db}?schema=public
+      REDIS_URL: redis://redis:6379
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      ADMIN_NAME: ${ADMIN_NAME:-Super Admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_SENDER: ${EMAIL_SENDER:-TraceCraft <no-reply@example.com>}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-}
+      PAYMENT_BKASH_NUMBER: ${PAYMENT_BKASH_NUMBER:-}
+      PAYMENT_NAGAD_NUMBER: ${PAYMENT_NAGAD_NUMBER:-}
+      PAYMENT_ROCKET_NUMBER: ${PAYMENT_ROCKET_NUMBER:-}
+    volumes:
+      - tracecraft_storage:/app/storage
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5010/api/v1}
+    container_name: tracecraft-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3010}:3000"
+    environment:
+      NODE_ENV: production
+
+volumes:
+  tracecraft_pgdata:
+  tracecraft_redisdata:
+  tracecraft_storage:
