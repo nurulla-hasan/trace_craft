@@ -16,9 +16,25 @@ const app: Application = express();
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
-const allowedOrigins = Array.from(
-  new Set([config.frontend_url || 'http://localhost:3000', 'http://localhost:3000']),
-);
+const rawOrigin = config.frontend_url || 'http://localhost:3000';
+const allowedOrigins = new Set([
+  rawOrigin,
+  'http://localhost:3000',
+  'http://localhost:3010',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3010',
+]);
+
+if (rawOrigin.includes('.sslip.io')) {
+  allowedOrigins.add(rawOrigin.replace('.sslip.io', ''));
+}
+const ipMatch = rawOrigin.match(/https?:\/\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?/);
+if (ipMatch) {
+  const ip = ipMatch[1];
+  const port = ipMatch[2] || '';
+  allowedOrigins.add(`http://${ip}.sslip.io${port}`);
+  allowedOrigins.add(`https://${ip}.sslip.io${port}`);
+}
 
 // Security & utility middlewares
 app.use(
@@ -29,7 +45,12 @@ app.use(
 app.use(
   cors({
     credentials: true,
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin) || config.node_env !== 'production') {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'), false);
+    },
   }),
 );
 app.use(compression());
