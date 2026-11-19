@@ -17,6 +17,7 @@ interface DockButtonProps {
   disabled?: boolean;
   loading?: boolean;
   pressed?: boolean;
+  className?: string;
 }
 
 export function DockButton({
@@ -28,6 +29,7 @@ export function DockButton({
   disabled,
   loading,
   pressed,
+  className,
 }: DockButtonProps) {
   return (
     <Tooltip>
@@ -42,6 +44,7 @@ export function DockButton({
             loadingText=""
             aria-label={label}
             aria-pressed={pressed}
+            className={className}
           />
         }
       >

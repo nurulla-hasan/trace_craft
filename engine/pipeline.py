@@ -9,6 +9,7 @@ Adapted from `new/vectorizer_pipeline.py` and `new/make_sheet_svg.py` for:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 import re
 import tempfile
@@ -19,6 +20,7 @@ from scipy import ndimage as ndi
 import vtracer
 
 SCALE = 4
+MAX_IMAGE_PIXELS = 36_000_000  # 36 Megapixels safeguard against decompression bombs
 
 
 def load_image(path: str) -> np.ndarray:
@@ -27,6 +29,15 @@ def load_image(path: str) -> np.ndarray:
     raw = cv2.imdecode(data, cv2.IMREAD_UNCHANGED) if data.size > 0 else None
     if raw is None:
         raise FileNotFoundError(f"Could not read image: {path}")
+
+    # Guard against memory exhaustion / decompression bombs
+    h_raw, w_raw = raw.shape[:2]
+    total_px = h_raw * w_raw
+    if total_px > MAX_IMAGE_PIXELS:
+        scale_down = (MAX_IMAGE_PIXELS / total_px) ** 0.5
+        new_w, new_h = max(1, int(w_raw * scale_down)), max(1, int(h_raw * scale_down))
+        raw = cv2.resize(raw, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
     if raw.ndim == 2:
         return cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
     if raw.shape[2] == 4:
@@ -130,8 +141,8 @@ def trace_color9(
     merge: float = 9.0,
     core_r: int = 2,
     sigma: float = 1.8,
-    speckle: int = 12,
-    layer_diff: int = 6,
+    speckle: int = 16,
+    layer_diff: int = 10,
     cp: int = 8,
     prec: int = 1,
     glow_px: int = 14,
@@ -373,10 +384,15 @@ def split_regions_masked(
 
 
 def trace_binary_sheet(img_bgr: np.ndarray, include_bg: bool = True) -> str:
-    """Black outline sheet / line art: trace at 4x in binary spline mode via vtracer."""
+    """Black outline sheet / line art: trace in binary spline mode via vtracer.
+    Uses dynamic scale to prevent RAM exhaustion on large sheets.
+    """
     H, W = img_bgr.shape[:2]
+    max_dim = max(H, W)
+    dyn_scale = SCALE if max_dim <= 1600 else (2 if max_dim <= 3200 else 1)
+
     g = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    up = cv2.resize(g, None, fx=SCALE, fy=SCALE, interpolation=cv2.INTER_CUBIC)
+    up = cv2.resize(g, None, fx=dyn_scale, fy=dyn_scale, interpolation=cv2.INTER_CUBIC)
     up = cv2.GaussianBlur(up, (0, 0), 1.2)
     bw = np.where(up < 130, 0, 255).astype(np.uint8)
 
@@ -399,17 +415,32 @@ def trace_binary_sheet(img_bgr: np.ndarray, include_bg: bool = True) -> str:
             body = _inner_svg(f.read())
 
     bg_rect = (
-        f'<rect id="background" width="{W * SCALE}" height="{H * SCALE}" fill="#ffffff"/>\n'
+        f'<rect id="background" width="{W * dyn_scale}" height="{H * dyn_scale}" fill="#ffffff"/>\n'
         if include_bg
         else ""
     )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
-        f'viewBox="0 0 {W * SCALE} {H * SCALE}">\n'
+        f'viewBox="0 0 {W * dyn_scale} {H * dyn_scale}">\n'
         f"{bg_rect}"
         f'<g id="artwork">{body}</g>\n'
         f"</svg>\n"
     )
+
+
+def _trace_single_region(
+    item: tuple[int, tuple[tuple[int, int, int, int], np.ndarray]]
+) -> tuple[int, str]:
+    idx, ((x0, y0, x1, y1), crop) = item
+    svg_part, _, _ = trace_color9(crop)
+    body = _inner_svg(svg_part).strip()
+    if not body:
+        return idx, ""
+    part = (
+        f'  <g id="icon-{idx:02d}" transform="translate({x0 - 8},{y0 - 8}) scale({1 / SCALE})">'
+        f"{body}</g>"
+    )
+    return idx, part
 
 
 def vectorize_image(
@@ -437,16 +468,38 @@ def vectorize_image(
         }
 
     regions = split_regions_masked(img_bgr, bg_thresh=12)
-    parts: list[str] = []
-    for i, ((x0, y0, x1, y1), crop) in enumerate(regions, 1):
-        svg_part, _, _ = trace_color9(crop)
-        body = _inner_svg(svg_part).strip()
-        if not body:
-            continue
-        parts.append(
-            f'  <g id="icon-{i:02d}" transform="translate({x0 - 8},{y0 - 8}) scale({1 / SCALE})">'
-            f"{body}</g>"
+    if not regions:
+        # Fallback for empty/blank images
+        bg_rect = (
+            f'<rect id="background" width="{W}" height="{H}" fill="#ffffff"/>\n'
+            if include_bg
+            else ""
         )
+        empty_svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n{bg_rect}</svg>\n'
+        with open(output_svg_path, "w", encoding="utf-8") as f:
+            f.write(empty_svg)
+        return {
+            "mode": "color",
+            "width": W,
+            "height": H,
+            "regions": 0,
+            "paths": 0,
+            "bytes": len(empty_svg.encode("utf-8")),
+        }
+
+    # Parallelize multi-icon tracing across available CPU hardware threads
+    workers = min(8, max(1, os.cpu_count() or 4))
+    if len(regions) > 1 and workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = list(executor.map(_trace_single_region, enumerate(regions, 1)))
+        results.sort(key=lambda x: x[0])
+        parts = [elem for _, elem in results if elem]
+    else:
+        parts = []
+        for item in enumerate(regions, 1):
+            _, elem = _trace_single_region(item)
+            if elem:
+                parts.append(elem)
 
     bg_rect = (
         f'  <rect id="background" width="{W}" height="{H}" fill="#ffffff"/>\n'

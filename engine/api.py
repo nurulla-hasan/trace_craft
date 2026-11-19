@@ -9,6 +9,7 @@ from typing import Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from .pipeline import vectorize_image
 
@@ -48,7 +49,9 @@ async def vectorize_endpoint(
             out_path = f_out.name
 
         t0 = time.perf_counter()
-        stats = vectorize_image(in_path, out_path, mode=mode, include_bg=include_bg)
+        stats = await run_in_threadpool(
+            vectorize_image, in_path, out_path, mode=mode, include_bg=include_bg
+        )
         elapsed_ms = round((time.perf_counter() - t0) * 1000)
 
         with open(out_path, "r", encoding="utf-8") as f:

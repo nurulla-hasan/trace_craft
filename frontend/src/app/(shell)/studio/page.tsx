@@ -13,6 +13,7 @@ import type {
   QuotaInfo,
   StudioView,
   TraceMode,
+  VectorDrawMode,
   VectorizeApiResponse,
   VectorizeStats,
 } from "@/components/studio";
@@ -40,6 +41,7 @@ export default function StudioPage() {
   const [stats, setStats] = useState<VectorizeStats | null>(null);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+  const [vectorDrawMode, setVectorDrawMode] = useState<VectorDrawMode>("filled");
 
   const svgDataUrl = useMemo(() => {
     if (!svgOutput) return null;
@@ -228,9 +230,10 @@ export default function StudioPage() {
 
       <StudioCanvas
         originalUrl={originalUrl}
-        svgDataUrl={svgDataUrl}
+        svgContent={svgOutput}
         loading={loading}
         view={view}
+        vectorDrawMode={vectorDrawMode}
         zoom={zoom}
         pan={pan}
         canvasBg={canvasBg}
@@ -239,6 +242,8 @@ export default function StudioPage() {
         onZoomChange={handleZoomChange}
         onPanChange={setPan}
         onResetView={handleResetView}
+        onViewChange={setView}
+        onVectorDrawModeChange={setVectorDrawMode}
       />
 
       <StudioControls
@@ -250,6 +255,7 @@ export default function StudioPage() {
         transparentBg={transparentBg}
         canvasBg={canvasBg}
         view={view}
+        vectorDrawMode={vectorDrawMode}
         zoom={zoom}
         copied={copied}
         stats={stats}
@@ -260,6 +266,7 @@ export default function StudioPage() {
         onTransparentBgChange={setTransparentBg}
         onVectorize={handleVectorize}
         onViewChange={setView}
+        onVectorDrawModeChange={setVectorDrawMode}
         onCanvasBgChange={setCanvasBg}
         onZoomChange={handleZoomChange}
         onResetView={handleResetView}

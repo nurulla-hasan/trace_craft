@@ -1,6 +1,7 @@
 export type TraceMode = "auto" | "color" | "binary";
 export type CanvasBg = "surface" | "muted" | "checker";
-export type StudioView = "original" | "vector";
+export type StudioView = "original" | "vector" | "split";
+export type VectorDrawMode = "filled" | "lines" | "both";
 
 export interface VectorizeStats {
   mode: string;

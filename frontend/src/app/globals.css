@@ -315,4 +315,41 @@
       display: none;
     }
   }
+
+  /* Inline SVG Canvas Container: makes SVG fill 100% of dynamically-scaled container */
+  .vector-canvas-svg,
+  .vector-canvas-svg svg {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    overflow: visible;
+  }
+
+  /* Vector wireframe mode: reveals pure Bézier curves and path lines */
+  .vector-mode-lines svg path,
+  .vector-mode-lines svg polygon,
+  .vector-mode-lines svg polyline,
+  .vector-mode-lines svg circle,
+  .vector-mode-lines svg rect,
+  .vector-lens-lines svg path,
+  .vector-lens-lines svg polygon,
+  .vector-lens-lines svg polyline,
+  .vector-lens-lines svg circle,
+  .vector-lens-lines svg rect {
+    fill: transparent !important;
+    stroke: #00ffff !important;
+    stroke-width: 1.5px !important;
+    vector-effect: non-scaling-stroke !important;
+  }
+
+  /* Vector filled + lines overlay */
+  .vector-mode-both svg path,
+  .vector-mode-both svg polygon,
+  .vector-mode-both svg polyline,
+  .vector-mode-both svg circle,
+  .vector-mode-both svg rect {
+    stroke: rgba(0, 242, 254, 0.75) !important;
+    stroke-width: 1px !important;
+    vector-effect: non-scaling-stroke !important;
+  }
 }

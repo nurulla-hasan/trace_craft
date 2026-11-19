@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ImagePlus, LoaderCircle, Sparkles, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -8,7 +8,6 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   type CanvasBg,
-  type StudioView,
 } from "./types";
 
 export interface CanvasPan {
@@ -18,9 +17,8 @@ export interface CanvasPan {
 
 interface StudioCanvasProps {
   originalUrl: string | null;
-  svgDataUrl: string | null;
+  svgContent: string | null;
   loading: boolean;
-  view: StudioView;
   zoom: number;
   pan: CanvasPan;
   canvasBg: CanvasBg;
@@ -31,11 +29,14 @@ interface StudioCanvasProps {
   onResetView: () => void;
 }
 
+// Vectorizer.ai LoupeCutoffScale: lens appears automatically at 400% - 500% zoom
+const LOUPE_CUTOFF_ZOOM = 4.0;
+const LENS_RADIUS = 105;
+
 export function StudioCanvas({
   originalUrl,
-  svgDataUrl,
+  svgContent,
   loading,
-  view,
   zoom,
   pan,
   canvasBg,
@@ -46,9 +47,19 @@ export function StudioCanvas({
   onResetView,
 }: StudioCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [stageRect, setStageRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
+  // High performance animation refs: isolates interaction from React re-renders
   const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
   const panStartRef = useRef<{
@@ -59,16 +70,56 @@ export function StudioCanvas({
     originY: number;
   } | null>(null);
 
+  const rafIdRef = useRef<number | null>(null);
+  const syncTimeoutRef = useRef<number | null>(null);
+
+  // Sync internal refs with props when props change externally (e.g. zoom buttons, reset view)
   useEffect(() => {
     zoomRef.current = zoom;
-  }, [zoom]);
-
-  useEffect(() => {
     panRef.current = pan;
-  }, [pan]);
+    if (stageRef.current) {
+      stageRef.current.style.transform = `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`;
+    }
+  }, [zoom, pan]);
 
   const hasImage = Boolean(originalUrl);
+  const hasSvg = Boolean(svgContent);
 
+  // Natural aspect ratio from SVG viewBox
+  const aspectRatio = useMemo(() => {
+    if (svgContent) {
+      const vb = svgContent.match(
+        /viewBox=["']([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)["']/,
+      );
+      if (vb) {
+        const w = parseFloat(vb[3]);
+        const h = parseFloat(vb[4]);
+        if (w > 0 && h > 0) return `${w} / ${h}`;
+      }
+    }
+    return "4 / 3";
+  }, [svgContent]);
+
+  // Update stage geometry for 500% zoom lens overlay alignment
+  const updateStageGeometry = () => {
+    const container = containerRef.current;
+    const stage = stageRef.current;
+    if (!container || !stage) {
+      setStageRect(null);
+      return;
+    }
+    const cRect = container.getBoundingClientRect();
+    const sRect = stage.getBoundingClientRect();
+    setStageRect({
+      left: sRect.left - cRect.left,
+      top: sRect.top - cRect.top,
+      width: sRect.width,
+      height: sRect.height,
+    });
+  };
+
+  // Ultra-smooth mouse wheel zoom anchored at cursor
+  // Directly modifies stage DOM transform in RAF for zero-latency 120 FPS
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !hasImage) return;
@@ -82,8 +133,8 @@ export function StudioCanvas({
       const factor = event.ctrlKey
         ? Math.exp(-event.deltaY * 0.01)
         : event.deltaY < 0
-          ? 1.12
-          : 1 / 1.12;
+          ? 1.15
+          : 1 / 1.15;
 
       const nextZoom = Math.min(
         MAX_ZOOM,
@@ -102,16 +153,33 @@ export function StudioCanvas({
         y: mouseY - (mouseY - currentPan.y) * scaleRatio,
       };
 
-      onZoomChange(nextZoom);
-      onPanChange(nextPan);
+      zoomRef.current = nextZoom;
+      panRef.current = nextPan;
+
+      if (stageRef.current) {
+        stageRef.current.style.transform = `translate3d(${nextPan.x}px, ${nextPan.y}px, 0) scale(${nextZoom})`;
+      }
+
+      updateStageGeometry();
+
+      // Debounce notifying parent so React does not re-render on every micro-wheel tick
+      if (syncTimeoutRef.current) {
+        window.clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = window.setTimeout(() => {
+        onZoomChange(nextZoom);
+        onPanChange(nextPan);
+      }, 50);
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       container.removeEventListener("wheel", handleWheel);
+      if (syncTimeoutRef.current) window.clearTimeout(syncTimeoutRef.current);
     };
   }, [hasImage, onZoomChange, onPanChange]);
 
+  // Pointer event handlers for butter-smooth panning & lens tracking
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!hasImage || loading) return;
     if (event.button !== 0 && event.button !== 1) return;
@@ -122,22 +190,43 @@ export function StudioCanvas({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: pan.x,
-      originY: pan.y,
+      originX: panRef.current.x,
+      originY: panRef.current.y,
     };
     setIsPanning(true);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const start = panStartRef.current;
-    if (!start || start.pointerId !== event.pointerId) return;
+    // 1. Pan dragging with RAF — ZERO React state changes or re-renders!
+    const panStart = panStartRef.current;
+    if (panStart && panStart.pointerId === event.pointerId) {
+      const dx = event.clientX - panStart.startX;
+      const dy = event.clientY - panStart.startY;
+      const nextX = panStart.originX + dx;
+      const nextY = panStart.originY + dy;
 
-    const dx = event.clientX - start.startX;
-    const dy = event.clientY - start.startY;
-    onPanChange({
-      x: start.originX + dx,
-      y: start.originY + dy,
-    });
+      panRef.current = { x: nextX, y: nextY };
+
+      if (!rafIdRef.current) {
+        rafIdRef.current = window.requestAnimationFrame(() => {
+          rafIdRef.current = null;
+          if (stageRef.current) {
+            stageRef.current.style.transform = `translate3d(${nextX}px, ${nextY}px, 0) scale(${zoomRef.current})`;
+          }
+          updateStageGeometry();
+        });
+      }
+      return;
+    }
+
+    // 2. Track mouse position for 500% zoom inspection lens
+    if (containerRef.current) {
+      const cRect = containerRef.current.getBoundingClientRect();
+      const lx = event.clientX - cRect.left;
+      const ly = event.clientY - cRect.top;
+      setMousePos({ x: lx, y: ly });
+      updateStageGeometry();
+    }
   };
 
   const handlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -149,6 +238,14 @@ export function StudioCanvas({
     }
     panStartRef.current = null;
     setIsPanning(false);
+
+    // Commit final coordinates once upon release
+    onPanChange({ ...panRef.current });
+    updateStageGeometry();
+  };
+
+  const handlePointerLeave = () => {
+    setMousePos(null);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -158,10 +255,15 @@ export function StudioCanvas({
     if (dropped) onFileDrop(dropped);
   };
 
-  const transformStyle: React.CSSProperties = {
-    transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-    transformOrigin: "center",
-  };
+  // Check if 500% zoom inspection lens should be active
+  const showInspectionLens =
+    hasSvg &&
+    hasImage &&
+    !loading &&
+    !isPanning &&
+    zoom >= LOUPE_CUTOFF_ZOOM &&
+    mousePos !== null &&
+    stageRect !== null;
 
   return (
     <div
@@ -176,6 +278,7 @@ export function StudioCanvas({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
+      onPointerLeave={handlePointerLeave}
       onDoubleClick={() => {
         if (hasImage) onResetView();
       }}
@@ -189,6 +292,24 @@ export function StudioCanvas({
         isDraggingFile && "ring-2 ring-primary ring-inset",
       )}
     >
+      {/* Top Vectorizer Result Badge */}
+      {hasImage && !loading && (
+        <div className="pointer-events-none absolute top-4 inset-x-0 z-20 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full border border-studio-border/70 bg-studio-panel/90 px-3.5 py-1 text-xs font-medium text-studio-foreground shadow-md backdrop-blur-md transition-all">
+            <span className="size-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
+            <span>
+              {hasSvg ? "Vectorizer.AI Result" : "Original Image"}
+            </span>
+            {hasSvg && zoom >= LOUPE_CUTOFF_ZOOM && (
+              <span className="rounded bg-cyan-950/60 px-1.5 py-0.5 text-[10px] font-mono text-cyan-300 border border-cyan-400/40">
+                Pixel &amp; Line Inspection ({Math.round(zoom * 100)}%)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Empty / Canvas Content */}
       {!hasImage ? (
         <button
           type="button"
@@ -211,50 +332,97 @@ export function StudioCanvas({
         </button>
       ) : (
         <div className="flex h-full w-full items-center justify-center">
-          {view === "vector" ? (
-            svgDataUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={svgDataUrl}
-                alt="Vectorized SVG preview"
-                draggable={false}
-                style={transformStyle}
-                className="pointer-events-none max-h-full max-w-full object-contain"
+          {/* Main Stage with Hardware GPU Compositor Transform */}
+          <div
+            ref={stageRef}
+            style={{
+              aspectRatio: aspectRatio,
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+              transformOrigin: "center",
+            }}
+            className="relative flex h-auto max-h-[80vh] w-auto max-w-[85vw] items-center justify-center select-none"
+          >
+            {/* ONLY VECTOR VIEW: Clean, full-color mathematical vector graphics */}
+            {hasSvg ? (
+              <div
+                className="vector-canvas-svg h-full w-full select-none"
+                dangerouslySetInnerHTML={{ __html: svgContent }}
               />
             ) : (
-              <div className="flex max-w-sm flex-col items-center gap-2 rounded-2xl bg-studio-panel/90 p-6 text-center shadow-sm">
-                <Sparkles className="size-8 text-primary" aria-hidden="true" />
-                <p className="text-sm font-semibold text-studio-foreground">
-                  No vector yet
-                </p>
-                <p className="text-sm leading-6 text-studio-muted">
-                  Pick a tracing mode, then press the sparkle button to
-                  vectorize.
-                </p>
-              </div>
-            )
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={originalUrl ?? ""}
-              alt="Original raster"
-              draggable={false}
-              style={transformStyle}
-              className="pointer-events-none max-h-full max-w-full object-contain"
-            />
-          )}
+              // If not yet vectorized: show uploaded original raster
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={originalUrl ?? ""}
+                alt="Original"
+                draggable={false}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                }}
+                className="pointer-events-none block h-full w-full object-contain"
+              />
+            )}
+          </div>
         </div>
       )}
 
+      {/* 500% ZOOM INSPECTION LENS: Exact replica of Vectorizer.ai (Screenshot 2) */}
+      {/* Appears automatically at >= 400%-500% zoom, showing pixelated raster + cyan vector lines */}
+      {showInspectionLens && mousePos && stageRect && (
+        <div
+          aria-hidden="true"
+          style={{
+            width: LENS_RADIUS * 2,
+            height: LENS_RADIUS * 2,
+            transform: `translate3d(${mousePos.x - LENS_RADIUS}px, ${mousePos.y - LENS_RADIUS}px, 0)`,
+          }}
+          className="pointer-events-none absolute top-0 left-0 z-30 select-none overflow-hidden rounded-full border-[2.5px] border-cyan-400 bg-background/90 shadow-[0_0_0_1px_rgba(0,242,254,0.6),0_0_24px_6px_rgba(0,242,254,0.55),inset_0_0_16px_rgba(0,242,254,0.25)]"
+        >
+          {/* Inner content wrapper aligned 100% seamlessly to the outer canvas coordinate */}
+          <div
+            style={{
+              width: stageRect.width,
+              height: stageRect.height,
+              transform: `translate3d(${stageRect.left - (mousePos.x - LENS_RADIUS)}px, ${stageRect.top - (mousePos.y - LENS_RADIUS)}px, 0)`,
+            }}
+            className="relative h-full w-full"
+          >
+            {/* 1. Raw Original Raster Bitmap with crisp pixel blocks */}
+            {originalUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={originalUrl}
+                alt=""
+                draggable={false}
+                style={{
+                  imageRendering: "pixelated",
+                }}
+                className="pointer-events-none absolute inset-0 block h-full w-full object-contain"
+              />
+            )}
+
+            {/* 2. Fitted Cyan Vector Lines Superimposed over the pixels */}
+            {svgContent && (
+              <div
+                className="vector-canvas-svg vector-lens-lines pointer-events-none absolute inset-0 h-full w-full"
+                dangerouslySetInnerHTML={{ __html: svgContent }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Status Bar / Hints */}
       {hasImage && !loading && (
         <p
           aria-hidden="true"
           className="pointer-events-none absolute bottom-3 left-4 hidden rounded-lg border border-studio-border/70 bg-studio-panel/80 px-2.5 py-1 font-mono text-xs text-studio-muted backdrop-blur-sm lg:block"
         >
-          Scroll to zoom · Drag to pan · Double-click to reset
+          Scroll to zoom · Drag to pan · Double-click to reset · Zoom &gt; 400% reveals pixel &amp; vector lines
         </p>
       )}
 
+      {/* Loading Overlay */}
       {loading && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/70 backdrop-blur-sm">
           <LoaderCircle

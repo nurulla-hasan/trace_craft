@@ -9,11 +9,9 @@ import {
   Copy,
   Download,
   Eraser,
-  Image as ImageIcon,
   ImageDown,
   PaintBucket,
   Palette,
-  Shapes,
   Sparkles,
   Trash,
   Upload,
@@ -42,7 +40,6 @@ import {
   TRACE_MODE_LABELS,
   type CanvasBg,
   type QuotaInfo,
-  type StudioView,
   type TraceMode,
   type VectorizeStats,
 } from "./types";
@@ -85,7 +82,6 @@ interface StudioControlsProps {
   mode: TraceMode;
   transparentBg: boolean;
   canvasBg: CanvasBg;
-  view: StudioView;
   zoom: number;
   copied: boolean;
   stats: VectorizeStats | null;
@@ -95,7 +91,6 @@ interface StudioControlsProps {
   onModeChange: (mode: TraceMode) => void;
   onTransparentBgChange: (value: boolean) => void;
   onVectorize: () => void;
-  onViewChange: (view: StudioView) => void;
   onCanvasBgChange: (bg: CanvasBg) => void;
   onZoomChange: (zoom: number) => void;
   onResetView: () => void;
@@ -112,7 +107,6 @@ export function StudioControls({
   mode,
   transparentBg,
   canvasBg,
-  view,
   zoom,
   copied,
   stats,
@@ -122,7 +116,6 @@ export function StudioControls({
   onModeChange,
   onTransparentBgChange,
   onVectorize,
-  onViewChange,
   onCanvasBgChange,
   onZoomChange,
   onResetView,
@@ -231,25 +224,7 @@ export function StudioControls({
 
         <DockDivider />
 
-        <DockButton
-          label="Original view"
-          variant={view === "original" ? "secondary" : "ghost"}
-          onClick={() => onViewChange("original")}
-          pressed={view === "original"}
-        >
-          <ImageIcon />
-        </DockButton>
-
-        <DockButton
-          label="Vector view"
-          variant={view === "vector" ? "secondary" : "ghost"}
-          onClick={() => onViewChange("vector")}
-          disabled={!hasSvg && !loading}
-          pressed={view === "vector"}
-        >
-          <Shapes />
-        </DockButton>
-
+        {/* Canvas Background Popover */}
         <Popover open={bgOpen} onOpenChange={setBgOpen}>
           <PopoverTrigger
             render={
